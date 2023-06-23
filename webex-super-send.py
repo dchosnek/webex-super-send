@@ -32,7 +32,6 @@ import os
 def send_webex_message(**kwargs):
     """Sends a Webex message using kwargs so that it can send markdown or cards
     to either a person's email or a roomId. Returns status code of the call."""
-    # payload = dict(toPersonEmail=email, markdown=message)
     url = "https://webexapis.com/v1/messages/"
     response = request("POST", url, data=json.dumps(kwargs),
                        headers=WEBEX_HEADERS)
@@ -42,27 +41,36 @@ def send_webex_message(**kwargs):
 # -----------------------------------------------------------------------------
 # ARGPARSE
 
-parser = argparse.ArgumentParser(description='Send a message or card through Webex.')
-parser.add_argument('--message', '-m', help='File containing message to be sent.')
-parser.add_argument('--token', help='Webex token if not stored as WEBEX_TOKEN environment variable.')
-parser.add_argument('recipients', help='List of emails or rooms to send to.', nargs='*')
+parser = argparse.ArgumentParser(
+    description='Send a message or card through Webex.')
+parser.add_argument('--message', '-m', metavar='FILE',
+                    help='File containing message to be sent.')
+parser.add_argument(
+    '--token', '-t', help='Webex token if not stored as WEBEX_TOKEN environment variable.')
+parser.add_argument(
+    'recipients', help='List of emails or rooms to send to.', nargs='*')
 args = parser.parse_args()
 
+# The Webex token to be used must either be set as an environment variable or
+# specified as a command-line argument (higher priority than the environment
+# variable). The Webex header is created using the given token.
 if args.token is None and os.getenv('WEBEX_TOKEN') is None:
     print('\nERROR! You must specify a WEBEX API token to send any messages.')
     print('You can specify at the command line or set it as an environment variable called WEBEX_TOKEN.\n')
+    parser.print_help()
     exit(0)
 elif args.token is not None:
     WEBEX_HEADERS = {
-            "Authorization": "Bearer " + args.token,
-            "Content-Type": "application/json"
-        }
+        "Authorization": "Bearer " + args.token,
+        "Content-Type": "application/json"
+    }
 else:
     WEBEX_HEADERS = {
-            "Authorization": "Bearer " + os.environ['WEBEX_TOKEN'],
-            "Content-Type": "application/json"
-        }
+        "Authorization": "Bearer " + os.environ['WEBEX_TOKEN'],
+        "Content-Type": "application/json"
+    }
 
+# The user must specify a message (card or markdown) in a file.
 if args.message is None:
     print('ERROR! You did not specify a message to send.\n')
     parser.print_help()
@@ -70,37 +78,46 @@ if args.message is None:
 
 
 # -----------------------------------------------------------------------------
-# CHECK PAYLOAD
+# CHECK MESSAGE PAYLOAD
 
-# If payload is valid JSON, it is assumed to be an adaptive card. Otherwise it
-# is assumed to be a markdown message. The boolean 'is_card' is set to track
-# whether the message payload is a card.
+# If message is valid JSON, it is assumed to be an adaptive card and a
+# markdown message is created as a fallback if the client cannot render the
+# card.
+# If it is not valid JSON, it is assumed to be a markdown message. An empty
+# list is created as an attachment.
+# In either case, this block of code creates the variables markdown and
+# attachments. Both variables are used later for every send operation.
 
 with open(args.message, 'r') as file:
     try:
-        payload = dict(contentType="application/vnd.microsoft.card.adaptive",
-                       content=json.load(file))
-        is_card = True
+        # wrap the JSON from the card designer in the required JSON envelope
+        attachments = dict(
+            contentType="application/vnd.microsoft.card.adaptive",
+            content=json.load(file)
+        )
+        markdown = "*Card could not be rendered*"
     except:
         file.seek(0)
-        payload = file.read()
-        is_card = False
+        attachments = []
+        markdown = file.read()
 
 # -----------------------------------------------------------------------------
 # MAIN
 
+# If a target has an @, it is assumed to be an email address and the message
+# will be sent to an email. Otherwise, it is assumed to be the ID of a room or
+# space, so it will be sent to that roomId.
+
 for target in args.recipients:
-    my_args = dict()
-    if is_card:
-        my_args['attachments'] = payload
-        my_args['markdown'] = 'Card could not be displayed.'
-    else:
-        my_args['markdown'] = payload
 
     if '@' in target:
-        my_args['toPersonEmail'] = target
+        my_args = dict(toPersonEmail=target)
     else:
-        my_args['roomId'] = target
+        my_args = dict(roomId=target)
+
+    # use the same attachments and markdown for every target
+    my_args['attachments'] = attachments
+    my_args['markdown'] = markdown
 
     status = send_webex_message(**my_args)
     print(F'status {status}: {target}')
