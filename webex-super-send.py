@@ -43,7 +43,7 @@ def send_webex_message(**kwargs):
 
 parser = argparse.ArgumentParser(
     description='Send a message or card through Webex.')
-parser.add_argument('--message', '-m', metavar='FILE',
+parser.add_argument('--message', '-m', metavar='FILE', required=True,
                     help='File containing message to be sent.')
 parser.add_argument(
     '--token', '-t', help='Webex token if not stored as WEBEX_TOKEN environment variable.')
@@ -72,11 +72,6 @@ else:
         "Content-Type": "application/json"
     }
 
-# The user must specify a message (card or markdown) in a file.
-if args.message is None:
-    print('ERROR! You did not specify a message to send.\n')
-    parser.print_help()
-    exit(0)
 
 # -----------------------------------------------------------------------------
 # CREATE RECIPIENTS LIST
