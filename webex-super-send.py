@@ -49,6 +49,8 @@ parser.add_argument(
     '--token', '-t', help='Webex token if not stored as WEBEX_TOKEN environment variable.')
 parser.add_argument(
     'recipients', help='List of emails or rooms to send to.', nargs='*')
+parser.add_argument('-l', metavar='FILE', dest='sendto',
+                    help='List of emails or rooms to send to.')
 args = parser.parse_args()
 
 # The Webex token to be used must either be set as an environment variable or
@@ -75,6 +77,20 @@ if args.message is None:
     print('ERROR! You did not specify a message to send.\n')
     parser.print_help()
     exit(0)
+
+# -----------------------------------------------------------------------------
+# CREATE RECIPIENTS LIST
+
+# Recipients can be specified in a file (one email or roomId per line) or as a
+# space-delimited list on the command-line... or both. This block of code
+# combines these recipients from both of these possible sources into one var.
+
+recipients = []
+if args.recipients is not None:
+    recipients = args.recipients
+if args.sendto is not None:
+    for line in open(args.sendto, 'r'):
+        recipients.append(line.rstrip())
 
 
 # -----------------------------------------------------------------------------
@@ -108,7 +124,7 @@ with open(args.message, 'r') as file:
 # will be sent to an email. Otherwise, it is assumed to be the ID of a room or
 # space, so it will be sent to that roomId.
 
-for target in args.recipients:
+for target in recipients:
 
     if '@' in target:
         my_args = dict(toPersonEmail=target)
